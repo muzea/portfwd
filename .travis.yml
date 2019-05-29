@@ -1,7 +1,7 @@
 language: go
 
 script:
-- build-release.sh
+- ./build-release.sh
 
 deploy:
   provider: releases
