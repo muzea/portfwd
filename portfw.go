@@ -203,7 +203,7 @@ func apiHandleProxyDetail(ctx *gin.Context) {
 func addAPIHandler(app *gin.Engine) {
 	app.GET("/ping", apiHandlePing)
 	app.POST("/proxy", apiHandleProxyAdd)
-	app.PATCH("/proxy/:local", apiHandleProxyAdd)
+	app.PATCH("/proxy/:local", apiHandleProxyUpdate)
 	app.DELETE("/proxy/:local", apiHandleProxyDelete)
 	app.GET("/proxy", apiHandleProxyList)
 	app.GET("/proxy/:local", apiHandleProxyDetail)
@@ -217,3 +217,4 @@ func main() {
 	addAPIHandler(app)
 	app.Run(configResult.APIPort)
 }
+
