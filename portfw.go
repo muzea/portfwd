@@ -10,6 +10,7 @@ import (
 	"strconv"
 
 	"github.com/docker/go-connections/proxy"
+	"github.com/gin-contrib/cors"
 	"github.com/gin-gonic/gin"
 )
 
@@ -110,7 +111,7 @@ func apiHandlePing(ctx *gin.Context) {
 
 type proxyAddItem struct {
 	Local  string `json:"local"  binding:"required"`
-	Targrt string `json:"targrt" binding:"required"`
+	Target string `json:"target" binding:"required"`
 }
 
 func apiHandleProxyAdd(ctx *gin.Context) {
@@ -119,7 +120,7 @@ func apiHandleProxyAdd(ctx *gin.Context) {
 	 * ```json
 	 * {
 	 *   "local": "10086",
-	 * 	 "targrt": "127.0.0.1:10010"
+	 * 	 "target": "127.0.0.1:10010"
 	 * }
 	 * ```
 	 */
@@ -128,15 +129,15 @@ func apiHandleProxyAdd(ctx *gin.Context) {
 		ctx.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
-	go prepareTCPHandler(item.Local, item.Targrt)
-	go prepareUDPHandler(item.Local, item.Targrt)
+	go prepareTCPHandler(item.Local, item.Target)
+	go prepareUDPHandler(item.Local, item.Target)
 	ctx.JSON(http.StatusCreated, gin.H{
 		"message": "done",
 	})
 }
 
 type proxyUpdateItem struct {
-	Targrt string `json:"targrt" binding:"required"`
+	Target string `json:"target" binding:"required"`
 }
 
 func apiHandleProxyUpdate(ctx *gin.Context) {
@@ -144,7 +145,7 @@ func apiHandleProxyUpdate(ctx *gin.Context) {
 	 * req
 	 * ```json
 	 * {
-	 * 	 "targrt": "127.0.0.1:10010"
+	 * 	 "target": "127.0.0.1:10010"
 	 * }
 	 * ```
 	 */
@@ -159,8 +160,8 @@ func apiHandleProxyUpdate(ctx *gin.Context) {
 		log.Fatalln(err)
 	}
 	closeAndDelete(incomingPort)
-	go prepareTCPHandler(local, item.Targrt)
-	go prepareUDPHandler(local, item.Targrt)
+	go prepareTCPHandler(local, item.Target)
+	go prepareUDPHandler(local, item.Target)
 	ctx.JSON(http.StatusCreated, gin.H{
 		"message": "done",
 	})
@@ -196,7 +197,7 @@ func apiHandleProxyDetail(ctx *gin.Context) {
 	tcpProxy := tcpProxyPool[incomingPort]
 	ctx.JSON(http.StatusOK, gin.H{
 		"local":  local,
-		"targrt": tcpProxy.BackendAddr().String(),
+		"target": tcpProxy.BackendAddr().String(),
 	})
 }
 
@@ -214,7 +215,7 @@ func main() {
 	udpProxyPool = make(map[int]*proxy.UDPProxy)
 	resolveConfig()
 	app := gin.Default()
+	app.Use(cors.Default())
 	addAPIHandler(app)
 	app.Run(configResult.APIPort)
 }
-
