@@ -1,0 +1,68 @@
+<!DOCTYPE html>
+<html lang="zh-hans">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta http-equiv="X-UA-Compatible" content="ie=edge" />
+    <script src="https://cdn.jsdelivr.net/npm/vue/dist/vue.js"></script>
+    <link
+      rel="stylesheet"
+      href="https://unpkg.com/element-ui/lib/theme-chalk/index.css"
+    />
+    <script src="https://unpkg.com/element-ui/lib/index.js"></script>
+    <title>简陋的web</title>
+  </head>
+  <body>
+    <div id="app">
+      <el-row>
+        <el-col :span="12" :offset="6">
+          <el-button @click="handleAdd" type="primary" plain
+            >添加一个</el-button
+          >
+          <el-table :data="tableData" style="width: 100%" row-key="local">
+            <el-table-column prop="local" label="local" width="120px">
+            </el-table-column>
+            <el-table-column prop="target" label="target" width="200px">
+            </el-table-column>
+            <el-table-column label="action">
+              <template slot-scope="scope">
+                <el-button
+                  size="mini"
+                  @click="handleEdit(scope.row.local, scope.row.target)"
+                  >编辑</el-button
+                >
+                <el-popover placement="top" width="160">
+                  <p>确定删除吗？</p>
+                  <div style="text-align: right; margin: 0">
+                    <el-button
+                      type="primary"
+                      size="mini"
+                      @click="handleDelete(scope.row.local)"
+                      >确定</el-button
+                    >
+                  </div>
+                  <el-button size="mini" type="danger" slot="reference">删除</el-button>
+                </el-popover>
+              </template>
+            </el-table-column>
+          </el-table>
+        </el-col>
+      </el-row>
+      <el-dialog title="form" :visible.sync="dialogFormVisible">
+        <el-form :model="form">
+          <el-form-item label="target" :label-width="formLabelWidth">
+            <el-input v-model="form.target" autocomplete="off"></el-input>
+          </el-form-item>
+          <el-form-item label="local" :label-width="formLabelWidth">
+            <el-input :disabled="!isAdd" v-model="form.local" autocomplete="off"></el-input>
+          </el-form-item>
+        </el-form>
+        <div slot="footer" class="dialog-footer">
+          <el-button @click="dialogFormVisible = false">取 消</el-button>
+          <el-button type="primary" @click="handleFormAction">确 定</el-button>
+        </div>
+      </el-dialog>
+    </div>
+  </body>
+  <script src="./index.js"></script>
+</html>
