@@ -19,6 +19,11 @@
           <el-button @click="handleAdd" type="primary" plain
             >添加一个</el-button
           >
+          <div style="float: right;">
+            <el-input placeholder="api host" v-model="api">
+              <template slot="prepend">api地址</template>
+            </el-input>
+          </div>
           <el-table :data="tableData" style="width: 100%" row-key="local">
             <el-table-column prop="local" label="local" width="120px">
             </el-table-column>

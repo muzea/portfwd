@@ -17,6 +17,10 @@ interface Config {
 
 示例参见 [示例配置](config.json)
 
+## web 控制台
+
+提供了一个[简陋的web](https://muzea.github.io/portfwd/web/)。
+
 ## api
 
 - 均要求数据为 `application/json`
