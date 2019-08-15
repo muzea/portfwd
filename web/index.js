@@ -11,16 +11,16 @@ new Vue({
       isAdd: false,
       form: {
         target: '',
-        local: '',
-      }
-    }
+        local: ''
+      },
+      loading: true
+    };
   },
   methods: {
     handleFormAction() {
       if (this.isAdd) {
         this.handleAddAction();
       } else {
-
       }
     },
     handleEdit(local, target) {
@@ -38,6 +38,9 @@ new Vue({
       this.isAdd = true;
       this.dialogFormVisible = true;
     },
+    handleReload() {
+      this.loadList();
+    },
     handleAddAction() {
       this.dialogFormVisible = false;
       this.addItem(this.form.local, this.form.target);
@@ -47,40 +50,46 @@ new Vue({
       this.updateItem(this.form.local, this.form.target);
     },
     async loadList() {
+      this.loading = true;
       const resp = await (await fetch(`${this.api}/proxy`, { mode: 'cors' })).json();
       const keys = Object.keys(resp);
-      this.tableData  = keys.map(key => {
+      this.tableData = keys.map(key => {
         return {
           local: key,
-          target: resp[key],
+          target: resp[key]
         };
       });
+      this.loading = false
     },
     async addItem(local, target) {
+      this.loading = true;
       await fetch(`${this.api}/proxy`, {
         method: 'POST',
         body: JSON.stringify({ local, target }),
-        mode: 'cors',
+        mode: 'cors'
       });
       this.loadList();
     },
     async updateItem(local, target) {
-      await fetch(`${this.api}/proxy/${local}`, {
+      this.loading = true;
+      await fetch(`${this.api}/proxy/${encodeURIComponent(local)}`, {
         method: 'PATCH',
         body: JSON.stringify({ target }),
-        mode: 'cors',
+        mode: 'cors'
       });
       this.loadList();
     },
     async deleteItem(local) {
-      await fetch(`${this.api}/proxy/${local}`, {
+      this.loading = true;
+      console.warn(this);
+      await fetch(`${this.api}/proxy/${encodeURIComponent(local)}`, {
         method: 'DELETE',
-        mode: 'cors',
+        mode: 'cors'
       });
       this.loadList();
-    },
+    }
   },
   mounted: function() {
     this.loadList();
   }
-})
+});

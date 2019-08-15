@@ -8,11 +8,14 @@ import (
 	"net"
 	"net/http"
 	"strconv"
+	"strings"
 
 	"github.com/docker/go-connections/proxy"
 	"github.com/gin-contrib/cors"
 	"github.com/gin-gonic/gin"
 )
+
+var portSep = "/"
 
 var tcpProxyPool map[int]*proxy.TCPProxy
 var udpProxyPool map[int]*proxy.UDPProxy
@@ -32,27 +35,46 @@ func getFileContent(fileName string) []byte {
 	return buf
 }
 
+func addProxyItem(localPort string, target string) {
+	targetTCPAddr, err := net.ResolveTCPAddr("tcp", target)
+	if err != nil {
+		log.Fatalln(err)
+	}
+	var iLocalPortStart int
+	var iLocalPortEnd int
+	if strings.Index(localPort, portSep) >= 0 {
+		_, err := fmt.Sscanf(localPort, "%d/%d", &iLocalPortStart, &iLocalPortEnd)
+		if err != nil {
+			log.Fatalln(err)
+		}
+	} else {
+		iLocalPortStart, err = strconv.Atoi(localPort)
+		if err != nil {
+			log.Fatalln(err)
+		}
+		iLocalPortEnd = iLocalPortStart
+	}
+	for i := 0; (iLocalPortStart + i) <= iLocalPortEnd; i++ {
+		targetTCPAddrCurrent := &net.TCPAddr{IP: targetTCPAddr.IP, Port: targetTCPAddr.Port + i, Zone: targetTCPAddr.Zone}
+		targetUDPAddrCurrent := &net.UDPAddr{IP: targetTCPAddr.IP, Port: targetTCPAddr.Port + i, Zone: targetTCPAddr.Zone}
+		go prepareTCPHandler(iLocalPortStart+i, targetTCPAddrCurrent)
+		go prepareUDPHandler(iLocalPortStart+i, targetUDPAddrCurrent)
+	}
+	configResult.Proxy[localPort] = target
+	log.Printf("proxy %s to %s", localPort, target)
+}
+
 func resolveConfig() {
 	configContent := getFileContent("./config.json")
 	json.Unmarshal(configContent, &configResult)
 	for localPort, target := range configResult.Proxy {
-		go prepareTCPHandler(localPort, target)
-		go prepareUDPHandler(localPort, target)
-		log.Printf("proxy %s to %s", localPort, target)
+		addProxyItem(localPort, target)
 	}
 }
 
-func prepareTCPHandler(localPort string, target string) {
-	local := fmt.Sprintf(":%s", localPort)
+func prepareTCPHandler(localPort int, targetAddr *net.TCPAddr) {
+	local := fmt.Sprintf(":%d", localPort)
 	localAddr, err := net.ResolveTCPAddr("tcp", local)
-	if err != nil {
-		log.Fatalln(err)
-	}
-	incomingPort, err := strconv.Atoi(localPort)
-	if err != nil {
-		log.Fatalln(err)
-	}
-	targetAddr, err := net.ResolveTCPAddr("tcp", target)
 	if err != nil {
 		log.Fatalln(err)
 	}
@@ -60,21 +82,13 @@ func prepareTCPHandler(localPort string, target string) {
 	if err != nil {
 		log.Fatalln(err)
 	}
-	tcpProxyPool[incomingPort] = localProxy
+	tcpProxyPool[localPort] = localProxy
 	localProxy.Run()
 }
 
-func prepareUDPHandler(localPort string, target string) {
-	local := fmt.Sprintf(":%s", localPort)
+func prepareUDPHandler(localPort int, targetAddr *net.UDPAddr) {
+	local := fmt.Sprintf(":%d", localPort)
 	localAddr, err := net.ResolveUDPAddr("udp", local)
-	if err != nil {
-		log.Fatalln(err)
-	}
-	incomingPort, err := strconv.Atoi(localPort)
-	if err != nil {
-		log.Fatalln(err)
-	}
-	targetAddr, err := net.ResolveUDPAddr("udp", target)
 	if err != nil {
 		log.Fatalln(err)
 	}
@@ -82,24 +96,46 @@ func prepareUDPHandler(localPort string, target string) {
 	if err != nil {
 		log.Fatalln(err)
 	}
-	udpProxyPool[incomingPort] = localProxy
+	udpProxyPool[localPort] = localProxy
 	localProxy.Run()
 }
 
-func closeAndDelete(localPort int) {
-	{
-		tcpProxy, ok := tcpProxyPool[localPort]
-		if ok {
-			tcpProxy.Close()
-			delete(tcpProxyPool, localPort)
+func closeAndDelete(localPort string) {
+	var iPortStart int
+	var iPortEnd int
+	var err error
+	if strings.Index(localPort, portSep) >= 0 {
+		_, err = fmt.Sscanf(localPort, "%d/%d", &iPortStart, &iPortEnd)
+		if err != nil {
+			log.Fatalln(err)
+		}
+	} else {
+		iPortStart, err = strconv.Atoi(localPort)
+		if err != nil {
+			log.Fatalln(err)
+		}
+		iPortEnd = iPortStart
+	}
+	for i := 0; (iPortStart + i) <= iPortEnd; i++ {
+		current := iPortStart + i
+		{
+			tcpProxy, ok := tcpProxyPool[current]
+			if ok {
+				tcpProxy.Close()
+				delete(tcpProxyPool, current)
+			}
+		}
+		{
+			udpProxy, ok := udpProxyPool[current]
+			if ok {
+				udpProxy.Close()
+				delete(udpProxyPool, current)
+			}
 		}
 	}
-	{
-		udpProxy, ok := udpProxyPool[localPort]
-		if ok {
-			udpProxy.Close()
-			delete(udpProxyPool, localPort)
-		}
+	_, ok := configResult.Proxy[localPort]
+	if ok {
+		delete(configResult.Proxy, localPort)
 	}
 }
 
@@ -129,8 +165,9 @@ func apiHandleProxyAdd(ctx *gin.Context) {
 		ctx.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
-	go prepareTCPHandler(item.Local, item.Target)
-	go prepareUDPHandler(item.Local, item.Target)
+	addProxyItem(item.Local, item.Target)
+	// go prepareTCPHandler(item.Local, item.Target)
+	// go prepareUDPHandler(item.Local, item.Target)
 	ctx.JSON(http.StatusCreated, gin.H{
 		"message": "done",
 	})
@@ -155,13 +192,8 @@ func apiHandleProxyUpdate(ctx *gin.Context) {
 		return
 	}
 	local := ctx.Param("local")
-	incomingPort, err := strconv.Atoi(local)
-	if err != nil {
-		log.Fatalln(err)
-	}
-	closeAndDelete(incomingPort)
-	go prepareTCPHandler(local, item.Target)
-	go prepareUDPHandler(local, item.Target)
+	closeAndDelete(local)
+	addProxyItem(local, item.Target)
 	ctx.JSON(http.StatusCreated, gin.H{
 		"message": "done",
 	})
@@ -169,35 +201,21 @@ func apiHandleProxyUpdate(ctx *gin.Context) {
 
 func apiHandleProxyDelete(ctx *gin.Context) {
 	local := ctx.Param("local")
-	incomingPort, err := strconv.Atoi(local)
-	if err != nil {
-		log.Fatalln(err)
-	}
-	closeAndDelete(incomingPort)
+	closeAndDelete(local)
 	ctx.JSON(http.StatusOK, gin.H{
 		"message": "done",
 	})
 }
 
 func apiHandleProxyList(ctx *gin.Context) {
-	result := make(map[string]string)
-	for localPort, tcpProxy := range tcpProxyPool {
-		result[fmt.Sprintf("%d", localPort)] = tcpProxy.BackendAddr().String()
-	}
-	ctx.JSON(http.StatusOK, result)
+	ctx.JSON(http.StatusOK, configResult.Proxy)
 }
 
 func apiHandleProxyDetail(ctx *gin.Context) {
 	local := ctx.Param("local")
-	incomingPort, err := strconv.Atoi(local)
-	if err != nil {
-		ctx.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
-		log.Fatalln(err)
-	}
-	tcpProxy := tcpProxyPool[incomingPort]
 	ctx.JSON(http.StatusOK, gin.H{
 		"local":  local,
-		"target": tcpProxy.BackendAddr().String(),
+		"target": configResult.Proxy[local],
 	})
 }
 
@@ -215,6 +233,7 @@ func main() {
 	udpProxyPool = make(map[int]*proxy.UDPProxy)
 	resolveConfig()
 	app := gin.Default()
+	app.UseRawPath = true
 	app.Use(cors.Default())
 	addAPIHandler(app)
 	app.Run(configResult.APIPort)
