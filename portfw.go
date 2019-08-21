@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"strconv"
 	"strings"
+	"sync"
 
 	"github.com/docker/go-connections/proxy"
 	"github.com/gin-contrib/cors"
@@ -19,6 +20,8 @@ var portSep = "/"
 
 var tcpProxyPool map[int]*proxy.TCPProxy
 var udpProxyPool map[int]*proxy.UDPProxy
+
+var lock = sync.RWMutex{}
 
 type config struct {
 	Proxy   map[string]string `json:"proxy"`
@@ -36,6 +39,8 @@ func getFileContent(fileName string) []byte {
 }
 
 func addProxyItem(localPort string, target string) {
+	lock.Lock()
+	defer lock.Unlock()
 	targetTCPAddr, err := net.ResolveTCPAddr("tcp", target)
 	if err != nil {
 		log.Fatalln(err)
@@ -57,8 +62,8 @@ func addProxyItem(localPort string, target string) {
 	for i := 0; (iLocalPortStart + i) <= iLocalPortEnd; i++ {
 		targetTCPAddrCurrent := &net.TCPAddr{IP: targetTCPAddr.IP, Port: targetTCPAddr.Port + i, Zone: targetTCPAddr.Zone}
 		targetUDPAddrCurrent := &net.UDPAddr{IP: targetTCPAddr.IP, Port: targetTCPAddr.Port + i, Zone: targetTCPAddr.Zone}
-		go prepareTCPHandler(iLocalPortStart+i, targetTCPAddrCurrent)
-		go prepareUDPHandler(iLocalPortStart+i, targetUDPAddrCurrent)
+		prepareTCPHandler(iLocalPortStart+i, targetTCPAddrCurrent)
+		prepareUDPHandler(iLocalPortStart+i, targetUDPAddrCurrent)
 	}
 	configResult.Proxy[localPort] = target
 	log.Printf("proxy %s to %s", localPort, target)
@@ -68,7 +73,7 @@ func resolveConfig() {
 	configContent := getFileContent("./config.json")
 	json.Unmarshal(configContent, &configResult)
 	for localPort, target := range configResult.Proxy {
-		addProxyItem(localPort, target)
+		go addProxyItem(localPort, target)
 	}
 }
 
@@ -165,7 +170,7 @@ func apiHandleProxyAdd(ctx *gin.Context) {
 		ctx.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
-	addProxyItem(item.Local, item.Target)
+	go addProxyItem(item.Local, item.Target)
 	// go prepareTCPHandler(item.Local, item.Target)
 	// go prepareUDPHandler(item.Local, item.Target)
 	ctx.JSON(http.StatusCreated, gin.H{
@@ -193,7 +198,7 @@ func apiHandleProxyUpdate(ctx *gin.Context) {
 	}
 	local := ctx.Param("local")
 	closeAndDelete(local)
-	addProxyItem(local, item.Target)
+	go addProxyItem(local, item.Target)
 	ctx.JSON(http.StatusCreated, gin.H{
 		"message": "done",
 	})
