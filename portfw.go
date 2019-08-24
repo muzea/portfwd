@@ -88,7 +88,7 @@ func prepareTCPHandler(localPort int, targetAddr *net.TCPAddr) {
 		log.Fatalln(err)
 	}
 	tcpProxyPool[localPort] = localProxy
-	localProxy.Run()
+	go localProxy.Run()
 }
 
 func prepareUDPHandler(localPort int, targetAddr *net.UDPAddr) {
@@ -102,7 +102,7 @@ func prepareUDPHandler(localPort int, targetAddr *net.UDPAddr) {
 		log.Fatalln(err)
 	}
 	udpProxyPool[localPort] = localProxy
-	localProxy.Run()
+	go localProxy.Run()
 }
 
 func closeAndDelete(localPort string) {
