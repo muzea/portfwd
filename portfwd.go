@@ -2,11 +2,14 @@ package main
 
 import (
 	"encoding/json"
+	"flag"
 	"fmt"
 	"io/ioutil"
 	"log"
 	"net"
 	"net/http"
+	"os"
+	"path"
 	"strconv"
 	"strings"
 	"sync"
@@ -70,7 +73,14 @@ func addProxyItem(localPort string, target string) {
 }
 
 func resolveConfig() {
-	configContent := getFileContent("./config.json")
+	wd, err := os.Getwd()
+	if err != nil {
+		log.Fatal(err)
+	}
+	configName := flag.String("config", path.Join(wd, "config.json"), "config file path")
+	flag.Parse()
+	log.Printf("use config %s", *configName)
+	configContent := getFileContent(*configName)
 	json.Unmarshal(configContent, &configResult)
 	for localPort, target := range configResult.Proxy {
 		go addProxyItem(localPort, target)
